@@ -21,6 +21,12 @@ will stitch the two together into a new GGUF file. When the tensor data file isn
 end up with a vocab-only model that just has the metadata. This could be used for future Frankenstein-ing
 or training a model with that vocab/metadata as the base.
 
+### `gguf-tensor-to-image`
+
+Saves a tensor or tensors from a GGUF file as a greyscale image. The result is less interesting than I had hoped,
+perhaps postprocessing will help. The script can deal with `F32`, `F16` and `Q8_0` tensors and includes a tiny `Q8_0`
+ quantization/dequantization implementation
+
 ## Disclaimer
 
 These scripts are experimental and likely not very well tested. They may or may not work. Use at your own risk.
