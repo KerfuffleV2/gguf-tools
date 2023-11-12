@@ -91,7 +91,7 @@ def go(args: argparse.Namespace) -> None:
             result["metadata"] = metadata_hash.hexdigest()
         else:
             print(f"HASH {'METADATA':15} {metadata_hash.hexdigest()}")
-    if not args.skip_tensor_data:
+    if not (args.skip_tensors or args.skip_tensor_data):
         if args.json:
             result["tensor_data"] = tensor_data_hash.hexdigest()
         else:
