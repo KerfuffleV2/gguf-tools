@@ -11,18 +11,11 @@ All scripts support using `--help` for information on the commandline options.
 
 ### `gguf-checksum`
 
-Allows calculating a model's SHA256 without being affected by the exact order of the fields in the file. It's
-also possible to get checksums of the individual tensors or metadata fields. **Note**: The overall hash will
-not match that from tools like `sha256sum` since it is based on a sorted version of the fields. The point of
-the tool is to allow comparing models in a way where the order of the tensors of fields does not affect the
-result.
+Allows calculating a model's SHA256 without being affected by the exact order of the fields in the file. It's also possible to get checksums of the individual tensors or metadata fields. **Note**: The overall hash will not match that from tools like `sha256sum` since it is based on a sorted version of the fields. The point of the tool is to allow comparing models in a way where the order of the tensors of fields does not affect the result.
 
 **Examples:**
 
-`gguf-checksum.py model.gguf` — Generate a full checksum for the model, including tensor data. At the end,
-you'll get a SHA256 for the KV metadata, the tensor metadata, the whole metadata section, the tensor data
-alone and the overall SHA256 with all sections included. As mentioned, this won't match a SHA256 based
-only on the raw file content.
+`gguf-checksum.py model.gguf` — Generate a full checksum for the model, including tensor data. At the end, you'll get a SHA256 for the KV metadata, the tensor metadata, the whole metadata section, the tensor data alone and the overall SHA256 with all sections included. As mentioned, this won't match a SHA256 based only on the raw file content.
 
 `gguf-checksum.py --json model.gguf` — Same as above except the output will be in JSON format. Example:
 
@@ -34,8 +27,7 @@ only on the raw file content.
   "overall": "d4838aaca38a8b8742d417b7038f64f195a7f6c2a19db8ca13287ede72132bbc" }
 ```
 
-`gguf-checksum.py --hash-individual-kvs --hash-individual-tensors model.gguf` — Same as the first, except
-you will also get a SHA256 for each individual KV and each tensor's data. Example:
+`gguf-checksum.py --hash-individual-kvs --hash-individual-tensors model.gguf` — Same as the first, except you will also get a SHA256 for each individual KV and each tensor's data. Example:
 
 ```plaintext
 [...]
@@ -51,37 +43,27 @@ HASH TENSOR          dc856d2f9bc97c202a48cb5df2c8951eb68dc7b5c8683d9a9f268c65bc0
 
 ### `gguf-frankenstein`
 
-You supply an input metadata GGUF file and optionally an input tensor data GGUF file and this utility
-will stitch the two together into a new GGUF file. When the tensor data file isn't specified, you
-end up with a vocab-only model that just has the metadata. This could be used for future Frankenstein-ing
-or training a model with that vocab/metadata as the base.
+You supply an input metadata GGUF file and optionally an input tensor data GGUF file and this utility will stitch the two together into a new GGUF file. When the tensor data file isn't specified, you end up with a vocab-only model that just has the metadata. This could be used for future Frankenstein-ing or training a model with that vocab/metadata as the base.
 
 **Examples:**
 
-`gguf-frankenstein.py --metadata md.gguf --tensor td.gguf --output result.gguf` — Create `result.gguf` with the key/value
-metadata from `md.gguf` and the tensor data (and tensor metadata) from `td.gguf`.
+`gguf-frankenstein.py --metadata md.gguf --tensor td.gguf --output result.gguf` — Create `result.gguf` with the key/value metadata from `md.gguf` and the tensor data (and tensor metadata) from `td.gguf`.
 
-`gguf-frankenstein.py --metadata md.gguf --output result.gguf` — Create `result.gguf` with the key/value
-metadata from `md.gguf`. This will be a vocab-only model that could be used for training.
+`gguf-frankenstein.py --metadata md.gguf --output result.gguf` — Create `result.gguf` with the key/value metadata from `md.gguf`. This will be a vocab-only model that could be used for training.
 
 ***
 
 ### `gguf-tensor-to-image`
 
-Saves a tensor or tensors from a GGUF file as a greyscale image. The result is less interesting than I had hoped,
-perhaps postprocessing will help. The script can deal with `F32`, `F16` and `Q8_0` tensors and includes a tiny `Q8_0`
- quantization/dequantization implementation.
+Saves a tensor or tensors from a GGUF file as a greyscale image. The result is less interesting than I had hoped, perhaps postprocessing will help. The script can deal with `F32`, `F16` and `Q8_0` tensors and includes a tiny `Q8_0` quantization/dequantization implementation.
 
  **Examples:**
 
- `gguf-tensor-to-image.py --output out.png model.gguf output.weight` — Save the `output.weight` tensor in `model.gguf`
- as `out.png`
+ `gguf-tensor-to-image.py --output out.png model.gguf output.weight` — Save the `output.weight` tensor in `model.gguf` as `out.png`
 
- `gguf-tensor-to-image.py --output out.png model.gguf output.weight token_embd.weight` — Save the specified tensors in
- `model.gguf` as `output.weight.out.png` and `token_embd.weight.out.png`
+ `gguf-tensor-to-image.py --output out.png model.gguf output.weight token_embd.weight` — Save the specified tensors in `model.gguf` as `output.weight.out.png` and `token_embd.weight.out.png`
 
- `gguf-tensor-to-image.py --output ./imgs/tensor.png model.gguf '*'` — Save all tensors in `model.gguf` like
- `./imgs/output.weight.tensor.png`. *Note*: Be sure to quote or escape `*` when specifying it as an option.
+ `gguf-tensor-to-image.py --output ./imgs/tensor.png model.gguf '*'` — Save all tensors in `model.gguf` like `./imgs/output.weight.tensor.png`. *Note*: Be sure to quote or escape `*` when specifying it as an option.
 
 ***
 
