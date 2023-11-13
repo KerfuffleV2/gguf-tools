@@ -107,7 +107,11 @@ def go(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Checksum utility for GGUF files")
-    parser.add_argument("model", type=str, help="GGUF format model filename")
+    parser.add_argument(
+        "model",
+        type=str,
+        help="GGUF format model filename",
+    )
     parser.add_argument(
         "--skip-kvs",
         action="store_true",

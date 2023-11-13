@@ -81,7 +81,7 @@ def go(args: argparse.Namespace) -> None:
             gw.add_tensor_info(
                 tensor.name,
                 [int(val) for val in reversed(tensor.shape)],
-                np.float32,
+                np.dtype(np.float32),
                 int(tensor.n_bytes),
                 raw_dtype=tensor.tensor_type,
             )
