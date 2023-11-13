@@ -55,7 +55,7 @@ You supply an input metadata GGUF file and optionally an input tensor data GGUF 
 
 ### `gguf-tensor-to-image`
 
-Saves a tensor or tensors from a GGUF file as a greyscale image. The result is less interesting than I had hoped, perhaps postprocessing will help. The script can deal with `F32`, `F16` and `Q8_0` tensors and includes a tiny `Q8_0` quantization/dequantization implementation.
+Saves a tensor or tensors from a GGUF file as an image. See the `CFG_` values near the top. Some tensors are more interesting than others. Check out an `attn_q` tensor if you get the chance. Oh baby, there's a lot going on. The script can deal with `F32`, `F16` and `Q8_0` tensors and includes a tiny `Q8_0` quantization/dequantization implementation.
 
  **Examples:**
 

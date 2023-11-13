@@ -18,6 +18,24 @@ except ImportError:
 from gguf.constants import GGMLQuantizationType
 from gguf.gguf_reader import GGUFReader, ReaderTensor
 
+# Clip values to at max 7 standard deviations from the mean.
+CFG_SD_CLIP_THRESHOLD = 7
+
+# Number of standard deviations above the mean to be positive scaled.
+CFG_SDP_THRESHOLD = 1
+
+# Number of standard deviations below the mean to be negative scaled.
+CFG_SDN_THRESHOLD = 1
+
+# RGB scaling for pixels that meet the negative threshold.
+CFG_NEG_SCALE = (1.0, 0.6, 0.7)
+
+# RGB scaling for pixels that meet the positive threshold.
+CFG_POS_SCALE = (0.6, 1.0, 0.7)
+
+# RGB scaling for pixels between those ranges.
+CFG_MID_SCALE = (0.3, 0.3, 0.3)
+
 
 class Quantized:
     dtype: np.dtype[Any]
@@ -75,15 +93,27 @@ def make_image(tensor: ReaderTensor) -> Image.Image:
         td = Quantized_Q8_0.dequantize(tensor.data).reshape(tensor.shape)
     else:
         raise ValueError("Cannot handle tensor type")
-    td = (255 * ((td - np.min(td)) / np.ptp(td))).astype(np.uint8)
-    mode = "L"
-    return Image.fromarray(td, mode)
+    sd = np.std(td)
+    mean = np.mean(td)
+    sdp_max = mean + CFG_SD_CLIP_THRESHOLD * sd
+    sdp_thresh = mean + CFG_SDP_THRESHOLD * sd
+    sdn_thresh = mean - CFG_SDN_THRESHOLD * sd
+    tda = np.minimum(np.abs(td), sdp_max).repeat(3, axis=1).reshape((*td.shape, 3))
+    tda = 255 * ((tda - np.min(tda)) / np.ptp(tda))
+    tda[td <= sdn_thresh, ...] *= CFG_NEG_SCALE
+    tda[td >= sdp_thresh, ...] *= CFG_POS_SCALE
+    tda[np.logical_and(td > sdn_thresh, td < sdp_thresh), ...] *= CFG_MID_SCALE
+    return Image.fromarray(tda.astype(np.uint8), "RGB")
 
 
 def go(args: argparse.Namespace) -> None:
     reader = GGUFReader(args.model, "r")
     tensors = {tensor.name: tensor for tensor in reader.tensors}
-    names = tensors.keys() if args.tensor == ["*"] else args.tensor
+    names = (
+        [t.name for t in tensors.values() if args.match_1d or len(t.shape) > 1]
+        if args.tensor == ["*"]
+        else args.tensor
+    )
     for tk in names:
         tensor = tensors[tk]
         if "/" in tensor.name:
@@ -119,6 +149,11 @@ def main() -> None:
         required=True,
         type=Path,
         help="Output file, will be prefixed with the tensor name if multiple tensor names are specified",
+    )
+    parser.add_argument(
+        "--match-1d",
+        action="store_true",
+        help="When using a wildcard, also match 1 dimensional tensors",
     )
     parser.add_argument(
         "--force",

@@ -12,6 +12,7 @@ from gguf.gguf_reader import GGUFReader
 from gguf.gguf_writer import GGUFWriter
 
 
+# ruff: noqa: SLF001
 def go(args: argparse.Namespace) -> None:
     print(f"* Loading metadata source: {args.metadata}")
     md_reader = GGUFReader(args.metadata, "c")
