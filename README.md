@@ -45,6 +45,10 @@ HASH TENSOR          dc856d2f9bc97c202a48cb5df2c8951eb68dc7b5c8683d9a9f268c65bc0
 
 You supply an input metadata GGUF file and optionally an input tensor data GGUF file and this utility will stitch the two together into a new GGUF file. When the tensor data file isn't specified, you end up with a vocab-only model that just has the metadata. This could be used for future Frankenstein-ing or training a model with that vocab/metadata as the base.
 
+Here's what it can look like (little slice of an Orca 3B `attn_q`):
+
+![attn_q with no pants on](assets/attn_q_snippet.png)
+
 **Examples:**
 
 `gguf-frankenstein.py --metadata md.gguf --tensor td.gguf --output result.gguf` — Create `result.gguf` with the key/value metadata from `md.gguf` and the tensor data (and tensor metadata) from `td.gguf`.
