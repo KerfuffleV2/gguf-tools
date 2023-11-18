@@ -55,7 +55,7 @@ You supply an input metadata GGUF file and optionally an input tensor data GGUF 
 
 ### `gguf-tensor-to-image`
 
-Saves a tensor or tensors from a GGUF file as an image. See the `CFG_` values near the top. Some tensors are more interesting than others. Check out an `attn_q` tensor if you get the chance. Oh baby, there's a lot going on. The script can deal with `F32`, `F16` and `Q8_0` tensors and includes a tiny `Q8_0` quantization/dequantization implementation.
+Despite the name (and repo) this actually can handle Torch models as well if you have Torch Python support installed. Converts a tensor or tensors to an image representation. See the `CFG_` values near the top. Some tensors are more interesting than others. Check out an `attn_q` tensor if you get the chance. Oh baby, there's a lot going on. For GGUF, the script can deal with `F32`, `F16` and `Q8_0` tensors and includes a tiny `Q8_0` quantization/dequantization implementation. For Torch, it supports tensors in `float32`, `float16` and `bfloat16` formats.
 
 Here's what it can look like (little slice of an Orca 3B `attn_q`):
 

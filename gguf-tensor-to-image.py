@@ -10,7 +10,7 @@ import tempfile
 from collections import OrderedDict
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Iterable
+from typing import Any, Iterable, Protocol
 
 import numpy as np
 import numpy.typing as npt
@@ -21,8 +21,11 @@ except ImportError:
     print("This script requires Pillow installed. Example: pip install pillow")
     sys.exit(1)
 
-from gguf.constants import GGMLQuantizationType
-from gguf.gguf_reader import GGUFReader, ReaderTensor
+try:
+    from gguf.constants import GGMLQuantizationType
+    from gguf.gguf_reader import GGUFReader, ReaderTensor
+except ImportError:
+    pass
 
 # Clip values to at max 7 standard deviations from the mean.
 CFG_SD_CLIP_THRESHOLD = 7
@@ -87,19 +90,116 @@ class Quantized_Q8_0(Quantized):  # noqa: N801
         return (blocks["d"][:, None] * np.float32(blocks["qs"])).flatten()
 
 
-def make_image(args: argparse.Namespace, tensor: ReaderTensor) -> Image.Image:
-    if len(tensor.shape) > 2:
-        raise ValueError("Can only handle 1d and 2d tensors")
-    td: np.ndarray[Any, Any]
-    if tensor.tensor_type == GGMLQuantizationType.F16:
-        td = tensor.data.view(dtype=np.float32)
-    elif tensor.tensor_type == GGMLQuantizationType.F32:
-        td = tensor.data
-    elif tensor.tensor_type == GGMLQuantizationType.Q8_0:
-        td = Quantized_Q8_0.dequantize(tensor.data).reshape(tensor.shape)
-    else:
-        raise ValueError("Cannot handle tensor type")
-    if len(tensor.shape) == 1:
+class Model(Protocol):
+    def __init__(self, filename: Path | str) -> None:
+        pass
+
+    def tensor_names(self) -> Iterable[str]:
+        pass
+
+    def valid(self, key: str) -> tuple[bool, None | str]:
+        pass
+
+    def get_as_f32(self, key: str) -> npt.NDArray[np.float32]:
+        pass
+
+    def get_type_name(self, key: str) -> str:
+        pass
+
+
+class GGUFModel(Model):
+    def __init__(self, filename: Path | str) -> None:
+        try:
+            import gguf
+        except ImportError:
+            print(
+                "! Loading GGUF models requires the gguf Python model",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(f"* Loading GGUF model: {filename}")
+        self.gguf = gguf
+        self.reader = gguf.GGUFReader(filename, "r")
+        self.tensors: OrderedDict[str, ReaderTensor] = OrderedDict(
+            (tensor.name, tensor) for tensor in self.reader.tensors
+        )
+
+    def tensor_names(self) -> Iterable[str]:
+        return self.tensors.keys()
+
+    def valid(self, key: str) -> tuple[bool, None | str]:
+        tensor = self.tensors.get(key)
+        if tensor is None:
+            return (False, "Tensor not found")
+        if tensor.tensor_type not in (
+            self.gguf.GGMLQuantizationType.F16,
+            self.gguf.GGMLQuantizationType.F32,
+            self.gguf.GGMLQuantizationType.Q8_0,
+        ):
+            return (False, "Unhandled type")
+        if len(tensor.shape) > 2:
+            return (False, "Unhandled dimensions")
+        return (True, "OK")
+
+    def get_as_f32(self, key: str) -> npt.NDArray[np.float32]:
+        tensor = self.tensors[key]
+        if tensor.tensor_type == self.gguf.GGMLQuantizationType.F16:
+            return tensor.data.view(dtype=np.float32)
+        if tensor.tensor_type == self.gguf.GGMLQuantizationType.F32:
+            return tensor.data
+        if tensor.tensor_type == self.gguf.GGMLQuantizationType.Q8_0:
+            return Quantized_Q8_0.dequantize(tensor.data).reshape(tensor.shape)
+        raise ValueError("Unhandled tensor type")
+
+    def get_type_name(self, key: str) -> str:
+        return self.tensors[key].tensor_type.name
+
+
+class TorchModel(Model):
+    def __init__(self, filename: Path | str) -> None:
+        try:
+            import torch
+        except ImportError:
+            print(
+                "! Loading PyTorch models requires the Torch Python model",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        print(f"* Loading PyTorch model: {filename}")
+        self.torch = torch
+        self.model = torch.load(filename, map_location="cpu", mmap=True)
+        self.tensors: OrderedDict[str, None] = OrderedDict(
+            (tensor_name, tensor.squeeze())
+            for tensor_name, tensor in self.model.items()
+        )
+
+    def tensor_names(self) -> Iterable[str]:
+        return self.tensors.keys()
+
+    def valid(self, key: str) -> tuple[bool, None | str]:
+        tensor = self.tensors.get(key)
+        if tensor is None:
+            return (False, "Tensor not found")
+        if tensor.dtype not in (
+            self.torch.float32,
+            self.torch.float16,
+            self.torch.bfloat16,
+        ):
+            return (False, "Unhandled type")
+        if len(tensor.shape) > 2:
+            return (False, "Unhandled dimensions")
+        return (True, "OK")
+
+    def get_as_f32(self, key: str) -> npt.NDArray[np.float32]:
+        return self.tensors[key].to(dtype=self.torch.float32).numpy()
+
+    def get_type_name(self, key: str) -> str:
+        return str(self.tensors[key].dtype)
+
+
+def make_image(args: argparse.Namespace, td: npt.NDArray[np.float32]) -> Image.Image:
+    if len(td.shape) == 1:
         if args.adjust_1d_rows is not None:
             td = td.reshape((args.adjust_1d_rows, td.shape[0] // args.adjust_1d_rows))
         else:
@@ -128,27 +228,34 @@ def make_image(args: argparse.Namespace, tensor: ReaderTensor) -> Image.Image:
 
 
 def go(args: argparse.Namespace) -> None:
-    print(f"* Loading: {args.model}")
-    reader = GGUFReader(args.model, "r")
-    tensors: OrderedDict[str, ReaderTensor] = OrderedDict(
-        (tensor.name, tensor) for tensor in reader.tensors
-    )
+    model: Model
+    if args.model_type == "gguf" or args.model.lower().endswith(".gguf"):
+        model = GGUFModel(args.model)
+    elif args.model_type == "torch" or args.model.lower().endswith(".pth"):
+        model = TorchModel(args.model)
+    else:
+        raise ValueError("Can't handle this type of model, sorry")
     if args.match_glob:
         names = [
             name
-            for name in tensors
+            for name in model.tensor_names()
             if any(fnmatch.fnmatchcase(name, pat) for pat in args.tensor)
         ]
     elif args.match_regex:
         res = [re.compile(r) for r in args.tensor]
-        names = [name for name in tensors if any(r.search(name) for r in res)]
+        names = [
+            name for name in model.tensor_names() if any(r.search(name) for r in res)
+        ]
     else:
-        names = [tensors[name].name for name in args.tensor]
+        names = [name for name in args.tensor if model.valid(name)[0]]
     print(f"* Matching tensors: {', '.join(repr(n) for n in names)}")
     for tk in names:
-        tensor = tensors[tk]
+        tensor = model.get_as_f32(tk)
+        if not args.match_1d and len(tensor.shape) == 1:
+            continue
+        type_name = model.get_type_name(tk)
         output: None | Path = None
-        if "/" in tensor.name:
+        if "/" in tk:
             raise ValueError("Bad tensor name")
         if args.output is not None:
             if len(names) == 1:
@@ -156,14 +263,17 @@ def go(args: argparse.Namespace) -> None:
             else:
                 filepath = args.output.parent
                 filename = args.output.name
-                output = filepath / f"{tensor.name}.{filename}"
+                output = filepath / f"{tk}.{filename}"
         print(
-            f"* Processing tensor {tensor.name!r} (type:{tensor.tensor_type.name}, shape:{tensor.shape})",
+            f"* Processing tensor {tk!r} (type:{type_name}, shape:{tensor.shape})",
         )
         img = make_image(args, tensor)
         if args.scale != 1.0:
             img = img.resize(
-                (int(img.width * args.scale), int(img.height * args.scale)),
+                (
+                    max(1, int(img.width * args.scale)),
+                    max(1, int(img.height * args.scale)),
+                ),
                 resample=Image.Resampling.LANCZOS,
             )
         if output is not None:
@@ -182,7 +292,7 @@ def go(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Tensor to image converter for GGUF files",
+        description="Tensor to image converter for LLM models (GGUF and PyTorch)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=dedent(
             """\
@@ -198,7 +308,7 @@ def main() -> None:
     parser.add_argument(
         "model",
         type=str,
-        help="GGUF format model filename",
+        help="model filename, can be GGUF or PyTorch (if PyTorch support available)",
     )
     parser.add_argument(
         "tensor",
@@ -267,6 +377,11 @@ def main() -> None:
         choices=["devs-overall", "devs-rows", "devs-cols"],
         default="devs-overall",
         help="Output modes (see below). Default: devs-overall",
+    )
+    parser.add_argument(
+        "--model-type",
+        choices=["gguf", "torch"],
+        help="Specify model type (gguf or torch)",
     )
     args = parser.parse_args(None if len(sys.argv) > 1 else ["--help"])
     if not (args.show_with or args.output):
