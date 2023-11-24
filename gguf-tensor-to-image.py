@@ -144,9 +144,9 @@ class GGUFModel(Model):
     def get_as_f32(self, key: str) -> npt.NDArray[np.float32]:
         tensor = self.tensors[key]
         if tensor.tensor_type == self.gguf.GGMLQuantizationType.F16:
-            return tensor.data.view(dtype=np.float32)
+            return tensor.data.astype(dtype=np.float32, copy=False).reshape(tensor.shape)
         if tensor.tensor_type == self.gguf.GGMLQuantizationType.F32:
-            return tensor.data
+            return tensor.reshape(tensor.shape).data
         if tensor.tensor_type == self.gguf.GGMLQuantizationType.Q8_0:
             return Quantized_Q8_0.dequantize(tensor.data).reshape(tensor.shape)
         raise ValueError("Unhandled tensor type")
