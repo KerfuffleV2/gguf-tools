@@ -37,13 +37,13 @@ CFG_SDP_THRESHOLD = 1.25
 CFG_SDN_THRESHOLD = 1.25
 
 # RGB scaling for pixels that meet the negative threshold.
-CFG_NEG_SCALE = (1.0, 0.6, 0.7)
+CFG_NEG_SCALE = (1.0, 0.4, 0.8)
 
 # RGB scaling for pixels that meet the positive threshold.
-CFG_POS_SCALE = (0.6, 1.0, 0.7)
+CFG_POS_SCALE = (0.4, 0.8, 1.0)
 
 # RGB scaling for pixels between those ranges.
-CFG_MID_SCALE = (0.5, 0.5, 0.8)
+CFG_MID_SCALE = (0.7, 0.7, 0.9)
 
 
 class Quantized:
@@ -220,11 +220,11 @@ def make_image(args: argparse.Namespace, td: npt.NDArray[np.float32]) -> Image.I
     sdp_thresh = mean + CFG_SDP_THRESHOLD * sd
     sdn_thresh = mean - CFG_SDN_THRESHOLD * sd
     tda = np.minimum(np.abs(td), sdp_max).repeat(3, axis=-1).reshape((*td.shape, 3))
-    tda = 255 * ((tda - np.min(tda)) / np.ptp(tda))
     tda[td <= sdn_thresh, ...] *= CFG_NEG_SCALE
     tda[td >= sdp_thresh, ...] *= CFG_POS_SCALE
     tda[np.logical_and(td > sdn_thresh, td < sdp_thresh), ...] *= CFG_MID_SCALE
-    return Image.fromarray(tda.astype(np.uint8), "RGB")
+    tda = 255 * ((tda - np.min(tda)) / np.ptp(tda))
+    return Image.fromarray(tda.astype(np.uint8, copy=False), "RGB")
 
 
 def go(args: argparse.Namespace) -> None:
